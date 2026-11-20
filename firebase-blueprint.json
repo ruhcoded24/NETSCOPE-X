@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated SOC analyst profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 254 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email", "createdAt"]
+    },
+    "IncidentRecord": {
+      "title": "IncidentRecord",
+      "description": "Security incident persisted from threat detection engine for analyst triage.",
+      "type": "object",
+      "properties": {
+        "incidentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sourceIp": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "destinationIp": { "type": "string", "minLength": 0, "maxLength": 64 },
+        "category": { "type": "string", "enum": ["port_scan", "syn_anomaly", "traffic_spike", "dns_anomaly", "connection_anomaly"] },
+        "severity": { "type": "string", "enum": ["Informational", "Low", "Medium", "High", "Critical"] },
+        "riskScore": { "type": "number" },
+        "classification": { "type": "string", "enum": ["Heuristic Alert", "Confirmed Incident"] },
+        "ruleName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["new", "investigating", "resolved"] },
+        "falsePositive": { "type": "boolean" },
+        "notes": { "type": "string", "minLength": 0, "maxLength": 4000 },
+        "aiAnalysis": { "type": "string", "minLength": 0, "maxLength": 8000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["incidentId", "ownerId", "sourceIp", "category", "severity", "riskScore", "classification", "ruleName", "summary", "status", "falsePositive", "notes", "createdAt", "updatedAt"]
+    },
+    "CaptureSessionRecord": {
+      "title": "CaptureSessionRecord",
+      "description": "Recorded capture session summary stored by an analyst.",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "interfaceName": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "packetCount": { "type": "number" },
+        "byteCount": { "type": "number" },
+        "alertCount": { "type": "number" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "stoppedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["sessionId", "ownerId", "interfaceName", "packetCount", "byteCount", "alertCount", "startedAt", "stoppedAt"]
+    },
+    "AnalystSettings": {
+      "title": "AnalystSettings",
+      "description": "Analyst detection thresholds and UI preferences.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "defaultInterface": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "maxPackets": { "type": "number" },
+        "portScanThreshold": { "type": "number" },
+        "synThreshold": { "type": "number" },
+        "spikeMultiplier": { "type": "number" },
+        "dnsThreshold": { "type": "number" },
+        "reducedMotion": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "defaultInterface", "maxPackets", "portScanThreshold", "synThreshold", "spikeMultiplier", "dnsThreshold", "reducedMotion", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private analyst profile document keyed by Firebase Auth UID."
+    },
+    "/incidents/{incidentId}": {
+      "schema": { "$ref": "#/entities/IncidentRecord" },
+      "description": "Analyst-owned security incidents and investigation triage records."
+    },
+    "/captureSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/CaptureSessionRecord" },
+      "description": "Analyst-owned packet capture session summaries."
+    },
+    "/analystSettings/{userId}": {
+      "schema": { "$ref": "#/entities/AnalystSettings" },
+      "description": "Analyst-owned detection threshold and interface configuration."
+    }
+  }
+}

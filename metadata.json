@@ -1,0 +1,8 @@
+{
+  "name": "NETSCOPE X",
+  "description": "AI-powered Network Traffic Analyzer, 3D Topology Explorer, PCAP Forensics Lab, and Threat Intelligence Command Centre.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

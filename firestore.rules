@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core identity and validation primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwnerUid(uid) {
+      return isVerified() && request.auth.uid == uid;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'email', 'createdAt'])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.createdAt is timestamp;
+    }
+
+    function isValidIncident(data, incidentId) {
+      return data.keys().hasAll([
+          'incidentId', 'ownerId', 'sourceIp', 'destinationIp', 'category',
+          'severity', 'riskScore', 'classification', 'ruleName', 'summary',
+          'status', 'falsePositive', 'notes', 'aiAnalysis', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'incidentId', 'ownerId', 'sourceIp', 'destinationIp', 'category',
+          'severity', 'riskScore', 'classification', 'ruleName', 'summary',
+          'status', 'falsePositive', 'notes', 'aiAnalysis', 'createdAt', 'updatedAt'
+        ])
+        && data.incidentId is string && data.incidentId == incidentId && isValidId(data.incidentId)
+        && data.ownerId is string && data.ownerId == request.auth.uid && isValidId(data.ownerId)
+        && data.sourceIp is string && data.sourceIp.size() >= 1 && data.sourceIp.size() <= 64
+        && data.destinationIp is string && data.destinationIp.size() <= 64
+        && data.category in ['port_scan', 'syn_anomaly', 'traffic_spike', 'dns_anomaly', 'connection_anomaly']
+        && data.severity in ['Informational', 'Low', 'Medium', 'High', 'Critical']
+        && data.riskScore is number && data.riskScore >= 0 && data.riskScore <= 100
+        && data.classification in ['Heuristic Alert', 'Confirmed Incident']
+        && data.ruleName is string && data.ruleName.size() >= 1 && data.ruleName.size() <= 120
+        && data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 1000
+        && data.status in ['new', 'investigating', 'resolved']
+        && data.falsePositive is bool
+        && data.notes is string && data.notes.size() <= 4000
+        && data.aiAnalysis is string && data.aiAnalysis.size() <= 8000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCaptureSession(data, sessionId) {
+      return data.keys().hasAll([
+          'sessionId', 'ownerId', 'interfaceName', 'packetCount',
+          'byteCount', 'alertCount', 'startedAt', 'stoppedAt'
+        ])
+        && data.keys().hasOnly([
+          'sessionId', 'ownerId', 'interfaceName', 'packetCount',
+          'byteCount', 'alertCount', 'startedAt', 'stoppedAt'
+        ])
+        && data.sessionId is string && data.sessionId == sessionId && isValidId(data.sessionId)
+        && data.ownerId is string && data.ownerId == request.auth.uid && isValidId(data.ownerId)
+        && data.interfaceName is string && data.interfaceName.size() >= 1 && data.interfaceName.size() <= 64
+        && data.packetCount is number && data.packetCount >= 0
+        && data.byteCount is number && data.byteCount >= 0
+        && data.alertCount is number && data.alertCount >= 0
+        && data.startedAt is timestamp
+        && data.stoppedAt is timestamp;
+    }
+
+    function isValidAnalystSettings(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'defaultInterface', 'maxPackets', 'portScanThreshold',
+          'synThreshold', 'spikeMultiplier', 'dnsThreshold', 'reducedMotion', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'defaultInterface', 'maxPackets', 'portScanThreshold',
+          'synThreshold', 'spikeMultiplier', 'dnsThreshold', 'reducedMotion', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId && isValidId(data.ownerId)
+        && data.defaultInterface is string && data.defaultInterface.size() >= 1 && data.defaultInterface.size() <= 64
+        && data.maxPackets is number && data.maxPackets >= 100 && data.maxPackets <= 50000
+        && data.portScanThreshold is number && data.portScanThreshold >= 2 && data.portScanThreshold <= 500
+        && data.synThreshold is number && data.synThreshold >= 3 && data.synThreshold <= 1000
+        && data.spikeMultiplier is number && data.spikeMultiplier >= 1.2 && data.spikeMultiplier <= 50
+        && data.dnsThreshold is number && data.dnsThreshold >= 3 && data.dnsThreshold <= 1000
+        && data.reducedMotion is bool
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwnerUid(userId);
+      allow create: if isValidId(userId) && isOwnerUid(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(userId) && isOwnerUid(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName'])
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    match /incidents/{incidentId} {
+      allow get: if isValidId(incidentId) && isVerified() && existing().ownerId == request.auth.uid;
+      allow list: if isVerified() && resource.data.ownerId == request.auth.uid;
+      allow create: if isValidId(incidentId) && isVerified()
+        && isValidIncident(incoming(), incidentId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(incidentId) && isVerified()
+        && isValidIncident(incoming(), incidentId)
+        && existing().ownerId == request.auth.uid
+        && existing().status != 'resolved'
+        && incoming().ownerId == existing().ownerId
+        && incoming().incidentId == existing().incidentId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && ((existing().status == 'new' && incoming().status in ['investigating', 'resolved'])
+              || (existing().status == 'investigating' && incoming().status == 'resolved')))
+          || incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'falsePositive', 'classification', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly(['aiAnalysis', 'updatedAt'])
+        );
+      allow delete: if isValidId(incidentId) && isVerified() && existing().ownerId == request.auth.uid;
+    }
+
+    match /captureSessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isVerified() && existing().ownerId == request.auth.uid;
+      allow list: if isVerified() && resource.data.ownerId == request.auth.uid;
+      allow create: if isValidId(sessionId) && isVerified()
+        && isValidCaptureSession(incoming(), sessionId)
+        && incoming().stoppedAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(sessionId) && isVerified() && existing().ownerId == request.auth.uid;
+    }
+
+    match /analystSettings/{userId} {
+      allow get: if isValidId(userId) && isOwnerUid(userId);
+      allow create: if isValidId(userId) && isOwnerUid(userId)
+        && isValidAnalystSettings(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId) && isOwnerUid(userId)
+        && isValidAnalystSettings(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'defaultInterface', 'maxPackets', 'portScanThreshold',
+          'synThreshold', 'spikeMultiplier', 'dnsThreshold', 'reducedMotion', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+  }
+}
