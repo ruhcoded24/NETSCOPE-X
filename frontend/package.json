@@ -13,7 +13,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@google/genai": "^3.6.1",
     "@supabase/supabase-js": "^2.119.2",
     "@tailwindcss/vite": "^4.3.3",
@@ -43,6 +42,6 @@
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2"
+    "typescript": "^5.7.2"
   }
 }
