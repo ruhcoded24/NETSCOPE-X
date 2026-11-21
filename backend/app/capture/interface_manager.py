@@ -117,7 +117,7 @@ class InterfaceManager:
                 rx_packets = ioc.packets_recv
                 tx_packets = ioc.packets_sent
 
-            is_loopback = "loopback" in iface_name.lower() or (ipv4 and ipv4.startswith("127."))
+            is_loopback = bool("loopback" in iface_name.lower() or (ipv4 and ipv4.startswith("127.")))
 
             # Match friendly name with TShark
             tshark_info = tshark_map.get(iface_name)
@@ -127,11 +127,11 @@ class InterfaceManager:
                 ipv4=ipv4,
                 ipv6=ipv6,
                 mac=mac,
-                internal=is_loopback,
-                rxBytes=rx_bytes,
-                txBytes=tx_bytes,
-                rxPackets=rx_packets,
-                txPackets=tx_packets,
+                internal=bool(is_loopback),
+                rxBytes=int(rx_bytes or 0),
+                txBytes=int(tx_bytes or 0),
+                rxPackets=int(rx_packets or 0),
+                txPackets=int(tx_packets or 0),
                 status="up" if is_up else "down"
             ))
 
@@ -145,7 +145,7 @@ class InterfaceManager:
                     ipv4="127.0.0.1" if "loopback" in name.lower() else None,
                     ipv6=None,
                     mac=None,
-                    internal="loopback" in name.lower(),
+                    internal=bool("loopback" in name.lower()),
                     rxBytes=0,
                     txBytes=0,
                     rxPackets=0,

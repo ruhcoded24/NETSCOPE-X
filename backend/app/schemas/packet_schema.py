@@ -18,7 +18,7 @@ class NetworkInterfaceInfo(BaseModel):
     ipv4: Optional[str] = None
     ipv6: Optional[str] = None
     mac: Optional[str] = None
-    internal: bool = False
+    internal: Optional[bool] = False
     rxBytes: int = 0
     txBytes: int = 0
     rxPackets: int = 0
