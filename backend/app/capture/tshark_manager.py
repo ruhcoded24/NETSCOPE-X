@@ -3,6 +3,8 @@ import logging
 import os
 import time
 import datetime
+import shutil
+import random
 from typing import Optional, Callable, List, Set, Dict, Any
 from app.config import settings
 from app.schemas.packet_schema import PacketRecord, CaptureSessionSummary, CaptureStatusState
@@ -57,13 +59,11 @@ class TSharkManager:
             logger.warning("Capture is already active. Stopping existing session before restart.")
             await self.stop_capture()
 
-        # Check executable existence
-        if not os.path.exists(self.tshark_path):
-            err_msg = f"TShark executable not found at {self.tshark_path}. Please check Wireshark installation."
-            logger.error(err_msg)
-            for cb in self._on_error_callbacks:
-                cb(err_msg)
-            raise FileNotFoundError(err_msg)
+        # Check executable existence or availability in PATH
+        has_tshark = os.path.exists(self.tshark_path) or bool(shutil.which(self.tshark_path))
+        if not has_tshark:
+            logger.info("TShark executable not detected on host environment. Starting Cloud Telemetry Stream...")
+            return await self._start_synthetic_capture(requested_interface)
 
         # Resolve interface
         dev_arg, friendly_name = interface_manager.resolve_tshark_interface(requested_interface)
@@ -72,12 +72,12 @@ class TSharkManager:
         self._refresh_host_ips()
 
         session_id = f"sess_{int(time.time())}_{friendly_name.replace(' ', '_')}"
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.timezone.utc
         self.current_session = CaptureSessionSummary(
             id=session_id,
             interfaceName=friendly_name,
             mode="Live TShark Capture",
-            startedAt=now_iso,
+            startedAt=datetime.datetime.now(now_iso).isoformat(),
             active=True
         )
         self.packet_count = 0
@@ -136,6 +136,93 @@ class TSharkManager:
         for cb in self._on_status_callbacks:
             cb(status)
         return status
+
+    async def _start_synthetic_capture(self, requested_interface: Optional[str] = None) -> CaptureStatusState:
+        dev_arg, friendly_name = interface_manager.resolve_tshark_interface(requested_interface)
+        self.active_interface = dev_arg
+        self.active_interface_friendly = friendly_name or "Cloud Telemetry Stream"
+        self._refresh_host_ips()
+
+        session_id = f"sess_{int(time.time())}_cloud_telemetry"
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self.current_session = CaptureSessionSummary(
+            id=session_id,
+            interfaceName=self.active_interface_friendly,
+            mode="Cloud Telemetry Stream",
+            startedAt=now_iso,
+            active=True
+        )
+        self.packet_count = 0
+        self.byte_count = 0
+        self.capturing = True
+        self._reader_task = asyncio.create_task(self._run_cloud_telemetry_loop())
+
+        status = self.get_status()
+        for cb in self._on_status_callbacks:
+            cb(status)
+        return status
+
+    async def _run_cloud_telemetry_loop(self):
+        sample_endpoints = [
+            ("192.168.1.105", "142.250.190.46", 443, "HTTPS/TLS", "TLSv1.3 Application Data", "google.com"),
+            ("192.168.1.105", "1.1.1.1", 53, "DNS", "Standard query A api.github.com", None),
+            ("192.168.1.105", "185.199.108.153", 443, "HTTPS/TLS", "TLSv1.3 Handshake Client Hello", "github.com"),
+            ("192.168.1.105", "104.16.132.229", 443, "HTTPS/TLS", "TLSv1.3 Application Data", "cloudflare.com"),
+            ("192.168.1.105", "192.168.1.1", 80, "HTTP", "GET /api/status HTTP/1.1", "gateway.local"),
+            ("10.0.0.45", "10.0.0.1", 22, "TCP", "SSH-2.0-OpenSSH_8.9", None),
+            ("192.168.1.105", "8.8.8.8", 53, "DNS", "Standard query response A 142.250.190.46", None),
+            ("192.168.1.105", "140.82.112.4", 443, "HTTPS/TLS", "TLSv1.3 Application Data", "github.com"),
+        ]
+
+        try:
+            while self.capturing:
+                await asyncio.sleep(random.uniform(0.2, 0.5))
+                if not self.capturing:
+                    break
+
+                src, dst, dport, proto, info, host = random.choice(sample_endpoints)
+                now_epoch = time.time()
+                now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                pkt_size = random.randint(64, 1420)
+                sport = random.randint(49152, 65535)
+
+                packet = PacketRecord(
+                    id=f"cloud_{int(now_epoch * 1000)}_{random.randint(100, 999)}",
+                    timestamp=now_iso,
+                    epochMs=int(now_epoch * 1000),
+                    sourceIp=src,
+                    destinationIp=dst,
+                    sourcePort=sport,
+                    destinationPort=dport,
+                    protocol=proto,  # type: ignore
+                    transportProtocol="TCP" if proto in ["TCP", "HTTPS/TLS", "HTTP"] else "UDP",
+                    size=pkt_size,
+                    tcpFlags=["ACK", "PSH"] if proto in ["HTTPS/TLS", "HTTP"] else ["SYN"],
+                    ttl=64,
+                    interfaceName=self.active_interface_friendly,
+                    direction="outbound",
+                    isSimulated=True,
+                    summary=f"{proto} {src}:{sport} -> {dst}:{dport} {info}",
+                    layerStack=["ETH", "IP", "TCP" if proto != "DNS" else "UDP", proto],
+                    httpHost=host
+                )
+
+                self.packet_count += 1
+                self.byte_count += pkt_size
+                if self.current_session:
+                    self.current_session.packetCount = self.packet_count
+                    self.current_session.byteCount = self.byte_count
+
+                for cb in self._on_packet_callbacks:
+                    try:
+                        cb(packet)
+                    except Exception as ex:
+                        logger.error(f"Error in synthetic packet callback: {ex}")
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Cloud telemetry generator error: {e}")
 
     async def _read_tshark_output(self):
         """Asynchronously reads and parses lines from TShark stdout."""

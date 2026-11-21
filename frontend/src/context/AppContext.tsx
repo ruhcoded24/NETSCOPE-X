@@ -131,11 +131,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const reconnectTimerRef = useRef<number | null>(null);
 
   const pushToast = useCallback((title: string, tone: ToastMessage['tone'] = 'info') => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setToasts((prev) => [...prev.slice(-3), { id, title, tone }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    setToasts((prev) => {
+      if (prev.some((t) => t.title === title)) return prev;
+      const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      window.setTimeout(() => {
+        setToasts((curr) => curr.filter((t) => t.id !== id));
+      }, 4000);
+      return [...prev.slice(-3), { id, title, tone }];
+    });
   }, []);
 
   const navigate = useCallback((page: PageId) => {
