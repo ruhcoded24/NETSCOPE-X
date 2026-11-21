@@ -159,10 +159,10 @@ export const SimulationLab: React.FC = () => {
           const relatedAlerts = simAlerts.filter(
             (a) =>
               (sc.id === 'port_scan' && a.category === 'port_scan') ||
-              (sc.id === 'syn_flood_metadata' && a.category === 'syn_spike') ||
+              (sc.id === 'syn_flood_metadata' && a.category === 'syn_anomaly') ||
               (sc.id === 'traffic_spike' && a.category === 'traffic_spike') ||
               (sc.id === 'dns_anomaly' && a.category === 'dns_anomaly') ||
-              (sc.id === 'repeated_connections' && a.category === 'connection_fanout'),
+              (sc.id === 'repeated_connections' && a.category === 'connection_anomaly'),
           );
 
           return (

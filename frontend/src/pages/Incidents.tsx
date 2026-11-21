@@ -392,7 +392,7 @@ export const Incidents: React.FC = () => {
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-700 text-slate-200 hover:border-[#00E5FF] disabled:opacity-50"
                   >
                     <CloudUpload className="w-3.5 h-3.5" />
-                    {cloudMatch ? 'Synced in Firestore' : 'Sync to Firestore'}
+                    {cloudMatch ? 'Synced in Supabase' : 'Sync to Supabase'}
                   </button>
                 </div>
               </div>

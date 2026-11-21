@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabase';
 import type {
   AppSettings,
   CaptureSessionSummary,
@@ -16,13 +17,30 @@ import type {
 } from '../core/types';
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+
+  // Automatically attach Supabase JWT authorization header when signed in
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        headers['Authorization'] = `Bearer ${data.session.access_token}`;
+      }
+    } catch {
+      // Standalone mode if session unavailable
+    }
+  }
+
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    headers,
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data?.error || `HTTP ${res.status}`);
+    throw new Error(data?.detail || data?.error || `HTTP ${res.status}`);
   }
   return data as T;
 }

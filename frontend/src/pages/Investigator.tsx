@@ -193,7 +193,7 @@ function renderLocalThreatSchematic(alert: SecurityAlert, imageSize: '1K' | '2K'
 }
 
 export const Investigator: React.FC = () => {
-  const { alerts, selectedAlert, setSelectedAlert, settings, updateSettingsState, setActivePage, updateAlertState, pushToast } = useApp();
+  const { alerts, selectedAlert, setSelectedAlert, settings, updateSettingsState, navigate, updateAlertState, pushToast } = useApp();
   const active = selectedAlert ?? alerts[0] ?? null;
 
   const [model, setModel] = useState<AppSettings['preferredAiModel']>(settings.preferredAiModel || 'gemini-3.8-flash');
@@ -468,7 +468,7 @@ export const Investigator: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setActivePage('settings')}
+                      onClick={() => navigate('settings')}
                       className="px-2.5 py-1 text-xs rounded bg-[#FF9F43]/20 hover:bg-[#FF9F43]/30 text-white font-medium whitespace-nowrap transition-colors"
                     >
                       Open Settings

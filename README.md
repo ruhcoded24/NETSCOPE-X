@@ -10,16 +10,22 @@ NETSCOPE X is a modern, high-performance network security operations center (SOC
 NETSCOPE-X/
 ├── frontend/                     # React + TypeScript + Vite GUI
 │   ├── src/                      # UI components, pages, state management
+│   │   ├── components/common/    # AuthModal, Header, Holographic radar
+│   │   ├── context/              # AuthContext (Supabase Auth & Realtime Channels)
+│   │   ├── lib/                  # supabase.ts (Client initialization)
+│   │   └── services/api.ts       # Axios client with auto Bearer JWT injection
 │   ├── public/                   # Static assets & emblems
-│   ├── package.json              # Frontend scripts & dependencies
+│   ├── package.json              # Frontend scripts & dependencies (@supabase/supabase-js)
+│   ├── .env.example              # Frontend environment variables template
 │   └── vite.config.ts            # Reverse proxy (/api, /ws -> :8000)
 │
 ├── backend/                      # Python FastAPI Backend
 │   ├── app/
 │   │   ├── main.py               # FastAPI entry point, CORS, lifespan, SPA mount
-│   │   ├── config.py             # App configuration & environment loader
+│   │   ├── config.py             # App configuration & Supabase environment loader
 │   │   ├── api/                  # REST API route handlers
 │   │   │   ├── routes.py         # Consolidated API router & /api/health
+│   │   │   ├── auth_routes.py    # /api/auth/status, /api/auth/cloud-* (Supabase verification)
 │   │   │   ├── capture_routes.py # /api/interfaces, /api/capture/*
 │   │   │   ├── analytics_routes.py # /api/packets, /api/stats, /api/topology
 │   │   │   ├── detection_routes.py # /api/alerts, /api/simulation/*, /api/ai/*
@@ -37,10 +43,11 @@ NETSCOPE-X/
 │   │   │   ├── port_scan_detector.py # Port enumeration (PS-01)
 │   │   │   ├── traffic_spike_detector.py # Surge (VOL-03) & SYN anomaly (SYN-02)
 │   │   │   └── dns_anomaly_detector.py # DNS tunneling & lateral fanout (CON-05)
-│   │   ├── database/             # SQLite persistent storage
+│   │   ├── database/             # Storage Layer (Hybrid Local SQLite + Supabase Cloud)
 │   │   │   ├── database.py       # SQLAlchemy engine & session maker
-│   │   │   ├── models.py         # Sessions, packets, alerts, events models
-│   │   │   └── repositories.py   # Data access layer
+│   │   │   ├── models.py         # Sessions, packets, alerts, events models (SQLite)
+│   │   │   ├── repositories.py   # Data access layer
+│   │   │   └── supabase_client.py# Supabase Auth client & JWT validation dependency
 │   │   ├── websocket/            # Real-time streaming
 │   │   │   └── packet_stream.py  # WebSocket broadcast & bounded packet queue
 │   │   ├── forensics/            # Offline PCAP & PCAPNG forensics
@@ -50,12 +57,16 @@ NETSCOPE-X/
 │   │   │   └── incident_service.py # IP intelligence & AI SOC investigator
 │   │   └── schemas/              # Pydantic validation schemas
 │   │       └── packet_schema.py  # Types matching frontend TypeScript contracts
-│   ├── tests/                    # Automated test suite
+│   ├── tests/                    # Automated test suite (19 test cases)
+│   │   ├── test_api.py           # REST endpoints & capture contracts
+│   │   ├── test_supabase.py      # Supabase JWT authentication & dependency checks
+│   │   ├── test_detection.py     # Port scan & SYN flood threat rules
+│   │   └── test_parser.py        # TShark output parsing & header verification
 │   ├── data/                     # Persistent SQLite databases
 │   ├── uploads/                  # Managed PCAP uploads
 │   ├── logs/                     # Application logs
-│   ├── requirements.txt          # Python dependencies
-│   ├── .env.example              # Environment variables template
+│   ├── requirements.txt          # Python dependencies (supabase, pyjwt)
+│   ├── .env.example              # Backend environment variables template
 │   └── .gitignore
 │
 ├── README.md                     # Documentation
@@ -125,7 +136,86 @@ Open **`http://localhost:3000`** in your browser to access NETSCOPE X.
 | `POST` | `/api/simulation/stop` | Halt active simulation |
 | `POST` | `/api/simulation/clear`| Clear simulation artifacts |
 | `POST` | `/api/ai/investigate` | AI SOC analyst investigation report (Gemini or deterministic) |
+| `GET` | `/api/auth/status` | Current Supabase authentication status & user profile |
+| `GET` | `/api/auth/cloud-incidents` | Synchronize triaged security incidents from Supabase PostgreSQL |
+| `POST` | `/api/auth/cloud-incidents` | Persist new SOC incident record to Supabase with RLS |
+| `GET` | `/api/auth/cloud-reports` | List persistent forensic investigation reports |
+| `POST` | `/api/auth/cloud-reports` | Store new forensic report to Supabase |
 | `WS` | `/ws` / `/ws/packets` | High-frequency packet and alert streaming |
+
+---
+
+## Supabase Cloud Integration & Database Architecture
+
+NETSCOPE X features an enterprise hybrid persistence architecture designed for high security and performance:
+- **Local Real-Time Engine:** High-frequency packet inspection, live TShark capturing, and ephemeral ring buffers run strictly locally via FastAPI and SQLite.
+- **Supabase Cloud Layer:** Managed PostgreSQL 17 database providing secure user authentication, multi-tenant session records, incident triage, and forensic alert history.
+
+### Database Tables & Row Level Security (RLS)
+
+All cloud tables are hosted in the `public` schema with strict **Row Level Security (RLS)** enabled, ensuring that authenticated analysts access exclusively their own records:
+
+| Table | Description | RLS Policy Enforced |
+|---|---|---|
+| `public.profiles` | User profiles linked to `auth.users(id)` with analyst role & organization | `(select auth.uid()) = id` |
+| `public.capture_sessions` | Capture session history, interface details, and packet metrics | `(select auth.uid()) = user_id` |
+| `public.security_alerts` | Detected threat alerts, heuristic scores, and MITRE classifications | `(select auth.uid()) = user_id` |
+| `public.incidents` | Triaged SOC incident management and analyst remediation logs | `(select auth.uid()) = user_id` |
+| `public.saved_reports` | Stored SOC forensic investigation reports and AI narratives | `(select auth.uid()) = user_id` |
+| `public.pcap_files` | Metadata records for captured or uploaded PCAP trace files | `(select auth.uid()) = user_id` |
+
+> [!NOTE]
+> For optimal query planner performance, all RLS policies utilize scalar subqueries (`(select auth.uid()) = user_id`), caching evaluation per statement rather than evaluating per row.
+
+### Authentication & Session Verification Flow
+
+1. **Frontend Authentication (`AuthModal.tsx` & `AuthContext.tsx`):**
+   - Analysts sign up or log in via Supabase Auth using email/password or Google OAuth.
+   - Sessions are managed securely with automatic JWT refresh and browser storage.
+   - Real-time cloud incident updates are subscribed to via Supabase Realtime Channels (`supabase.channel('public:incidents-realtime')`).
+2. **Backend Token Verification (`app/database/supabase_client.py`):**
+   - The frontend Axios interceptor automatically attaches the active Supabase JWT in the `Authorization: Bearer <token>` header.
+   - FastAPI dependency `require_auth_user` validates the JWT token against the Supabase Auth service, extracting user ID, email, role, and metadata.
+   - If Supabase is unconfigured, the application gracefully defaults to standalone local mode.
+3. **Packet Payload Isolation:**
+   - Raw packet payloads are **never** transmitted to the cloud.
+   - Live packet capture is executed entirely locally via TShark and Npcap.
+   - Only sanitized security alerts, forensic summaries, and analyst notes are synchronized with Supabase.
+
+---
+
+## Configuration & Environment Variables
+
+Create `.env` files in both `backend/` and `frontend/` using their respective templates:
+
+### Backend (`backend/.env`)
+```bash
+HOST=127.0.0.1
+PORT=8000
+DEBUG=false
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# TShark binary
+TSHARK_PATH=C:\Program Files\Wireshark\tshark.exe
+DEFAULT_INTERFACE=Wi-Fi
+
+# Local SQLite Storage
+SQLITE_DB_PATH=data/netscope.db
+
+# Supabase Cloud Database & Auth
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your_supabase_anon_or_publishable_key
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key_optional
+```
+
+### Frontend (`frontend/.env`)
+```bash
+# Supabase Configuration (Use Publishable / Anon Key only; NEVER service_role)
+VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
+VITE_SUPABASE_ANON_KEY="your_supabase_publishable_or_anon_key"
+```
+
+---
 
 ---
 
@@ -152,8 +242,9 @@ Run backend tests using pytest:
 cd backend
 python -m pytest tests/ -v
 ```
-All 13 integration and unit tests cover:
+All 19 integration and unit tests cover:
 - Health and REST API contracts
+- Supabase JWT token verification, user authentication, and 401 guard dependencies
 - Interface discovery & TShark argument resolution
 - Live packet parsing & TCP flag extraction
 - Threat detection engine (port scans, SYN anomalies)

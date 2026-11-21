@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 15
     GEMINI_API_KEY: str = ""
 
+    # Supabase Configuration
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
+    SUPABASE_SERVICE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+
+    @property
+    def has_supabase(self) -> bool:
+        return bool(self.SUPABASE_URL and (self.SUPABASE_KEY or self.SUPABASE_SERVICE_KEY))
+
     @property
     def cors_origins(self) -> List[str]:
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]

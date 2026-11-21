@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useApp, type PageId } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { AuthModal } from '../common/AuthModal';
 
 interface NavGroup {
   label: string;
@@ -88,6 +89,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   } = useApp();
   const { user, signInWithGoogle, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const openAlertsCount = alerts.filter((a) => a.status !== 'resolved').length;
 
@@ -178,11 +180,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           ) : (
             <button
               type="button"
-              onClick={signInWithGoogle}
+              onClick={() => setAuthModalOpen(true)}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-lg border border-slate-700 text-slate-200 hover:border-[#00E5FF]/50 hover:text-[#00E5FF] transition-colors whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
-              Sign In to Sync Cloud Incidents
+              Sign In with Supabase
             </button>
           )}
         </div>
@@ -345,6 +347,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           ))}
         </div>
       )}
+
+      <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
     </div>
   );
 };
