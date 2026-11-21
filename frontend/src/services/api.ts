@@ -16,6 +16,8 @@ import type {
   TrafficStats,
 } from '../core/types';
 
+const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -34,7 +36,8 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     }
   }
 
-  const res = await fetch(url, {
+  const targetUrl = url.startsWith('http') ? url : `${RAW_BACKEND_URL}${url}`;
+  const res = await fetch(targetUrl, {
     ...init,
     headers,
   });

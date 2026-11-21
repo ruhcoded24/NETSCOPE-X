@@ -14,13 +14,19 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    HOST: str = os.environ.get("HOST", "0.0.0.0")
+    PORT: int = int(os.environ.get("PORT", "8000"))
     DEBUG: bool = False
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+    ALLOWED_ORIGINS: str = os.environ.get(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,*"
+    )
 
-    TSHARK_PATH: str = r"C:\Program Files\Wireshark\tshark.exe"
-    DEFAULT_INTERFACE: str = "Wi-Fi"
+    TSHARK_PATH: str = os.environ.get(
+        "TSHARK_PATH",
+        r"C:\Program Files\Wireshark\tshark.exe" if os.name == "nt" else "tshark"
+    )
+    DEFAULT_INTERFACE: str = os.environ.get("DEFAULT_INTERFACE", "Wi-Fi" if os.name == "nt" else "eth0")
 
     SQLITE_DB_PATH: str = "data/netscope.db"
     UPLOAD_DIR: str = "uploads"

@@ -213,8 +213,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const connect = () => {
       if (closed) return;
-      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+      let wsTarget = '';
+      const customBackend = (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_WS_URL || '').replace(/\/$/, '');
+      if (customBackend) {
+        const wsProto = customBackend.startsWith('https') ? 'wss:' : 'ws:';
+        const cleanHost = customBackend.replace(/^https?:\/\//, '');
+        wsTarget = `${wsProto}//${cleanHost}/ws`;
+      } else {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsTarget = `${proto}//${window.location.host}/ws`;
+      }
+      const ws = new WebSocket(wsTarget);
       wsRef.current = ws;
 
       ws.onopen = () => setWsConnected(true);
